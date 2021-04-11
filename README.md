@@ -1,12 +1,17 @@
 # fastapi_di
-I extracted the dependency injection process from fastapi.
+Extracted the dependency injection process from fastapi.
 Dependency injection by fastapi_di is only available in the async environment.
 
-# setup
+# Requirement
+
+- Python 3.8+
+
+# Installation
 ``` shell
 poetry install fastapi_di
 ```
-# getting started
+
+# Getting started
 Dependency injection is done by decorating the function and calling do as follows.
 
 

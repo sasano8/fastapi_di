@@ -5,7 +5,7 @@ description = "Extracted the dependency injection process from fastapi."
 authors = ["sasano8 <y-sasahara@ys-method.com>"]
 license = "MIT"
 readme = "README.md"
-# repository = "https://github.com/sasano8/tradebot"
+repository = "https://github.com/sasano8/fastapi_di"
 
 [tool.poetry.dependencies]
 python = "^3.8"

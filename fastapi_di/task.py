@@ -3,7 +3,7 @@ from .protocols import F, FuncMimicry
 from .utils import get_dependant
 
 if TYPE_CHECKING:
-    from .manager import FastInjection
+    from .manager import Injector
 
 
 class DummyRequest:
@@ -16,7 +16,7 @@ class Task(FuncMimicry[F]):
         super().__init__(func)
         self.dependant = get_dependant(call=self)
 
-    def depend_on(self, di: "FastInjection"):
+    def depend_on(self, di: "Injector"):
         self.di = di
 
     @property

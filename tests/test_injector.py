@@ -1,6 +1,6 @@
-from fastapi_di.manager import FastInjection
+from fastapi_di import DI
 from fastapi import Depends
-
+import pytest
 
 context_val = 0
 
@@ -15,8 +15,9 @@ def get_db():
         context_val = 1
 
 
-async def check():
-    app = FastInjection()
+@pytest.mark.asyncio
+async def test_basic():
+    app = DI()
 
     @app.on_event("startup")
     def test():

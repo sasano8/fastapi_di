@@ -1,3 +1,3 @@
 from . import protocols
-from .manager import FastInjection as DI
+from .injector import Injector as DI
 from .task import Task

@@ -19,7 +19,7 @@ class DummyRequest:
         self.scope = {"fastapi_astack": stack}
 
 
-class FastInjection:
+class Injector:
     __task_class__: ClassVar[Type[Task]] = Task
 
     def __init__(

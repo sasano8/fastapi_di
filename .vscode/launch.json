@@ -9,7 +9,7 @@
       "module": "asy",
       "args": [
         "--reload",
-        "fastapi_di.spec:check",
+        "tests.test_injector:test_basic",
       ],
       "justMyCode": false
     }

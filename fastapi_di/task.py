@@ -1,17 +1,12 @@
 from typing import TYPE_CHECKING
-from .protocols import F, FuncMimicry
+from .protocols import F, FuncWrapper
 from .utils import get_dependant
 
 if TYPE_CHECKING:
-    from .manager import Injector
+    from .injector import Injector
 
 
-class DummyRequest:
-    def __init__(self, stack):
-        self.scope = {"fastapi_astack": stack}
-
-
-class Task(FuncMimicry[F]):
+class Task(FuncWrapper[F]):
     def __init__(self, func: F):
         super().__init__(func)
         self.dependant = get_dependant(call=self)

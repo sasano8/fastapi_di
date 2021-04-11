@@ -1,3 +1,4 @@
+import inspect
 from typing import (
     Optional,
     List,
@@ -14,7 +15,13 @@ from fastapi.dependencies.utils import request_body_to_args
 from fastapi.dependencies.utils import get_typed_signature
 from fastapi import params
 from pydantic.fields import ModelField
-import inspect
+from .concurrency import (
+    run_in_threadpool,
+    asynccontextmanager,
+    contextmanager_in_threadpool,
+    contextmanager,
+    AsyncExitStack,
+)
 
 
 F = TypeVar("F", bound=Callable)
@@ -159,7 +166,7 @@ def get_dependant(
 
 async def solve_dependencies(
     *,
-    # request: Union[Request, WebSocket],
+    request=None,
     # dependency_overrides_provider: Optional[Any] = None,
     # response: Optional[Response] = None,
     body: Optional[Dict[str, Any]] = None,
@@ -213,7 +220,7 @@ async def solve_dependencies(
             #     use_sub_dependant.security_scopes = sub_dependant.security_scopes
 
             solved_result = await solve_dependencies(
-                # request=request,
+                request=request,
                 dependant=use_sub_dependant,
                 body=body,
                 # background_tasks=background_tasks,
@@ -234,20 +241,20 @@ async def solve_dependencies(
                 continue
             if sub_dependant.use_cache and sub_dependant.cache_key in dependency_cache:
                 solved = dependency_cache[sub_dependant.cache_key]
-            # elif is_gen_callable(call) or is_async_gen_callable(call):
-            #     stack = request.scope.get("fastapi_astack")
-            #     if stack is None:
-            #         raise RuntimeError(
-            #             async_contextmanager_dependencies_error
-            #         )  # pragma: no cover
-            #     solved = await solve_generator(
-            #         call=call, stack=stack, sub_values=sub_values
-            #     )
+            elif is_gen_callable(call) or is_async_gen_callable(call):
+                stack = request.scope.get("fastapi_astack")
+                # if stack is None:
+                #     raise RuntimeError(
+                #         async_contextmanager_dependencies_error
+                #     )  # pragma: no cover
+                solved = await solve_generator(
+                    call=call, stack=stack, sub_values=sub_values
+                )
             elif is_coroutine_callable(call):
                 solved = await call(**sub_values)
             else:
-                # solved = await run_in_threadpool(call, **sub_values)
-                solved = call(**sub_values)
+                solved = await run_in_threadpool(call, **sub_values)
+                # solved = call(**sub_values)
         if sub_dependant.name is not None:
             values[sub_dependant.name] = solved
         if sub_dependant.cache_key not in dependency_cache:
@@ -296,3 +303,35 @@ async def solve_dependencies(
     #     )
     # return values, errors, background_tasks, response, dependency_cache
     return values, errors, dependency_cache
+
+
+async def solve_generator(
+    *, call: Callable[..., Any], stack: AsyncExitStack, sub_values: Dict[str, Any]
+) -> Any:
+    if is_gen_callable(call):
+        cm = contextmanager_in_threadpool(contextmanager(call)(**sub_values))
+    elif is_async_gen_callable(call):
+        if not inspect.isasyncgenfunction(call):
+            # asynccontextmanager from the async_generator backfill pre python3.7
+            # does not support callables that are not functions or methods.
+            # See https://github.com/python-trio/async_generator/issues/32
+            #
+            # Expand the callable class into its __call__ method before decorating it.
+            # This approach will work on newer python versions as well.
+            call = getattr(call, "__call__", None)
+        cm = asynccontextmanager(call)(**sub_values)
+    return await stack.enter_async_context(cm)
+
+
+def is_gen_callable(call: Callable[..., Any]) -> bool:
+    if inspect.isgeneratorfunction(call):
+        return True
+    call = getattr(call, "__call__", None)
+    return inspect.isgeneratorfunction(call)
+
+
+def is_async_gen_callable(call: Callable[..., Any]) -> bool:
+    if inspect.isasyncgenfunction(call):
+        return True
+    call = getattr(call, "__call__", None)
+    return inspect.isasyncgenfunction(call)

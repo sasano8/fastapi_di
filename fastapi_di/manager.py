@@ -2,6 +2,8 @@ from typing import Type, Optional, Mapping, Callable, List, Any
 from .task import Task
 from .protocols import F
 from inspect import getmodule
+from .utils import get_dependant, solve_dependencies
+from .concurrency import AsyncExitStack
 
 
 class APIRoute:
@@ -10,6 +12,11 @@ class APIRoute:
 
 class APIRouter:
     pass
+
+
+class DummyRequest:
+    def __init__(self, stack):
+        self.scope = {"fastapi_astack": stack}
 
 
 class FastInjection:
@@ -41,10 +48,23 @@ class FastInjection:
             if func_name in self.tasks:
                 raise KeyError(f"duplicate key error: name={func_name} func={func!r}")
             task = Task(func)
+            task.depend_on(self)
             self.tasks[func_name] = task
             return task
 
         return wrapped
+
+    @staticmethod
+    async def do(task: Task, **kwargs):
+        dependant = task.dependant
+        async with AsyncExitStack() as stack:
+            request = DummyRequest(stack=stack)
+            values, errors, dependency_cache = await solve_dependencies(
+                request=request, dependant=dependant, body=kwargs
+            )
+            values.update(kwargs)
+            result = await task(**values)
+        return result
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(tasks={self.tasks}, events={self.events})"

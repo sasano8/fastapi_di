@@ -1,4 +1,4 @@
-from typing import Type, Optional, Mapping, Callable, List, Any
+from typing import Type, Optional, Mapping, Callable, List, Any, ClassVar
 from .task import Task
 from .protocols import F
 from inspect import getmodule
@@ -20,6 +20,8 @@ class DummyRequest:
 
 
 class FastInjection:
+    __task_class__: ClassVar[Type[Task]] = Task
+
     def __init__(
         self,
         # routes: Optional[List[routing.BaseRoute]] = None,
@@ -47,7 +49,7 @@ class FastInjection:
             func_name = name or getmodule(func).__name__ + "." + func.__name__
             if func_name in self.tasks:
                 raise KeyError(f"duplicate key error: name={func_name} func={func!r}")
-            task = Task(func)
+            task = self.__task_class__(func)
             task.depend_on(self)
             self.tasks[func_name] = task
             return task

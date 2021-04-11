@@ -9,7 +9,7 @@
       "module": "asy",
       "args": [
         "--reload",
-        "dev:main",
+        "fastapi_di.spec:check",
       ],
       "justMyCode": false
     }

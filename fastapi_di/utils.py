@@ -1,5 +1,4 @@
 from typing import (
-    Mapping,
     Optional,
     List,
     Callable,
@@ -7,28 +6,18 @@ from typing import (
     Dict,
     Tuple,
     cast,
-    Sequence,
-    Type,
     TypeVar,
 )
-from inspect import getmodule
 from fastapi.dependencies.models import Dependant as DependantBase
 from pydantic.error_wrappers import ErrorWrapper
-from fastapi.dependencies.utils import request_params_to_args, request_body_to_args
-import asyncio
-from fastapi_di.protocols import FuncMimicry
-from functools import partial
+from fastapi.dependencies.utils import request_body_to_args
 from fastapi.dependencies.utils import get_typed_signature
-from fastapi import params, Depends
+from fastapi import params
+from pydantic.fields import ModelField
 import inspect
 
-import asy
 
 F = TypeVar("F", bound=Callable)
-
-
-class ModelField:
-    pass
 
 
 def is_coroutine_callable(call: Callable[..., Any]) -> bool:
@@ -184,70 +173,81 @@ async def solve_dependencies(
     # Response,
     Dict[Tuple[Callable[..., Any], Tuple[str]], Any],
 ]:
+    body = body or {}
     values: Dict[str, Any] = {}
     errors: List[ErrorWrapper] = []
     dependency_cache = dependency_cache or {}
     sub_dependant: Dependant
     for sub_dependant in dependant.dependencies:
-        sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)
-        sub_dependant.cache_key = cast(
-            Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key
-        )
-        call = sub_dependant.call
-        use_sub_dependant = sub_dependant
-        # if (
-        #     dependency_overrides_provider
-        #     and dependency_overrides_provider.dependency_overrides
-        # ):
-        #     original_call = sub_dependant.call
-        #     call = getattr(
-        #         dependency_overrides_provider, "dependency_overrides", {}
-        #     ).get(original_call, original_call)
-        #     use_path: str = sub_dependant.path  # type: ignore
-        #     use_sub_dependant = get_dependant(
-        #         path=use_path,
-        #         call=call,
-        #         name=sub_dependant.name,
-        #         security_scopes=sub_dependant.security_scopes,
-        #     )
-        #     use_sub_dependant.security_scopes = sub_dependant.security_scopes
-
-        solved_result = await solve_dependencies(
-            # request=request,
-            dependant=use_sub_dependant,
-            body=body,
-            # background_tasks=background_tasks,
-            # response=response,
-            # dependency_overrides_provider=dependency_overrides_provider,
-            dependency_cache=dependency_cache,
-        )
-        (
-            sub_values,
-            sub_errors,
-            # background_tasks,
-            # _,  # the subdependency returns the same response we have
-            sub_dependency_cache,
-        ) = solved_result
-        dependency_cache.update(sub_dependency_cache)
-        if sub_errors:
-            errors.extend(sub_errors)
-            continue
-        if sub_dependant.use_cache and sub_dependant.cache_key in dependency_cache:
-            solved = dependency_cache[sub_dependant.cache_key]
-        # elif is_gen_callable(call) or is_async_gen_callable(call):
-        #     stack = request.scope.get("fastapi_astack")
-        #     if stack is None:
-        #         raise RuntimeError(
-        #             async_contextmanager_dependencies_error
-        #         )  # pragma: no cover
-        #     solved = await solve_generator(
-        #         call=call, stack=stack, sub_values=sub_values
-        #     )
-        elif is_coroutine_callable(call):
-            solved = await call(**sub_values)
+        # custom
+        if sub_dependant.name in body:
+            solved = body[sub_dependant.name]
         else:
-            # solved = await run_in_threadpool(call, **sub_values)
-            solved = call(**sub_values)
+            # if sub_dependant.name is not None:
+            #     values[sub_dependant.name] = solved
+            # if sub_dependant.cache_key not in dependency_cache:
+            #     dependency_cache[sub_dependant.cache_key] = solved
+            # continue
+
+            sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)
+            sub_dependant.cache_key = cast(
+                Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key
+            )
+            call = sub_dependant.call
+            use_sub_dependant = sub_dependant
+            # if (
+            #     dependency_overrides_provider
+            #     and dependency_overrides_provider.dependency_overrides
+            # ):
+            #     original_call = sub_dependant.call
+            #     call = getattr(
+            #         dependency_overrides_provider, "dependency_overrides", {}
+            #     ).get(original_call, original_call)
+            #     use_path: str = sub_dependant.path  # type: ignore
+            #     use_sub_dependant = get_dependant(
+            #         path=use_path,
+            #         call=call,
+            #         name=sub_dependant.name,
+            #         security_scopes=sub_dependant.security_scopes,
+            #     )
+            #     use_sub_dependant.security_scopes = sub_dependant.security_scopes
+
+            solved_result = await solve_dependencies(
+                # request=request,
+                dependant=use_sub_dependant,
+                body=body,
+                # background_tasks=background_tasks,
+                # response=response,
+                # dependency_overrides_provider=dependency_overrides_provider,
+                dependency_cache=dependency_cache,
+            )
+            (
+                sub_values,
+                sub_errors,
+                # background_tasks,
+                # _,  # the subdependency returns the same response we have
+                sub_dependency_cache,
+            ) = solved_result
+            dependency_cache.update(sub_dependency_cache)
+            if sub_errors:
+                errors.extend(sub_errors)
+                continue
+            if sub_dependant.use_cache and sub_dependant.cache_key in dependency_cache:
+                solved = dependency_cache[sub_dependant.cache_key]
+            # elif is_gen_callable(call) or is_async_gen_callable(call):
+            #     stack = request.scope.get("fastapi_astack")
+            #     if stack is None:
+            #         raise RuntimeError(
+            #             async_contextmanager_dependencies_error
+            #         )  # pragma: no cover
+            #     solved = await solve_generator(
+            #         call=call, stack=stack, sub_values=sub_values
+            #     )
+            elif is_coroutine_callable(call):
+                solved = await call(**sub_values)
+            else:
+                # solved = await run_in_threadpool(call, **sub_values)
+                solved = call(**sub_values)
         if sub_dependant.name is not None:
             values[sub_dependant.name] = solved
         if sub_dependant.cache_key not in dependency_cache:
@@ -296,111 +296,3 @@ async def solve_dependencies(
     #     )
     # return values, errors, background_tasks, response, dependency_cache
     return values, errors, dependency_cache
-
-
-class Task(FuncMimicry[F]):
-    @property
-    def do(self) -> F:
-        """inject dependency and call."""
-        return self._do
-        # injected = partial(self.__root__)  # type: ignore
-        # return lambda *args, **kwargs: injected(*args, **kwargs)  # type: ignore
-
-    async def _do(self, **kwargs):
-        dependant = get_dependant(call=self)
-        values, errors, dependency_cache = await solve_dependencies(
-            dependant=dependant, body=kwargs
-        )
-        return await self(**values)
-
-    async def resolve_dependency(self, **kwargs):
-
-        # dependant = Dependant(call=self)
-        dependant = get_dependant(call=self)
-        return await solve_dependencies(dependant=dependant)
-
-
-class APIRoute:
-    pass
-
-
-class APIRouter:
-    pass
-
-
-class FastInjection:
-    def __init__(
-        self,
-        # routes: Optional[List[routing.BaseRoute]] = None,
-        route_class: Type[APIRoute] = APIRoute,
-        # on_startup: Optional[Sequence[Callable[[], Any]]] = None,
-        # on_shutdown: Optional[Sequence[Callable[[], Any]]] = None,
-        tasks: Optional[Mapping[str, Callable]] = None,
-        events: Optional[Mapping[str, List[Callable[[], Any]]]] = None,
-    ):
-        self.router = APIRouter
-        # self.routes = []
-        self.route_class = route_class
-        self.tasks = tasks or {}
-        self.events = events or {"startup": [], "shutdown": []}
-
-    def on_event(self, event_type: str) -> Callable:
-        def wrapped(func):
-            self.events[event_type].append(func)
-            return func
-
-        return wrapped
-
-    def task(self, name: str = None) -> Callable[[F], Task[F]]:
-        def wrapped(func: F) -> Task[F]:
-            func_name = name or getmodule(func).__name__ + "." + func.__name__
-            if func_name in self.tasks:
-                raise KeyError(f"duplicate key error: name={func_name} func={func!r}")
-            task = Task(func)
-            self.tasks[func_name] = task
-            return task
-
-        return wrapped
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(tasks={self.tasks}, events={self.events})"
-
-
-async def main():
-    app = FastInjection()
-
-    @app.on_event("startup")
-    def test():
-        pass
-
-    def get_user_id():
-        import random
-
-        return random.random()
-
-    @app.task()
-    def func(value=1):
-        return value
-
-    @app.task()
-    async def func2(user_id: int = Depends(get_user_id)):
-        return user_id
-
-    # assert func.do(value=3) == 3
-    values, errors, dependency_cache = await func2.resolve_dependency()
-    print(f"{values=} {errors=} {dependency_cache=}")
-
-    # values, errors, dependency_cache = await func2.resolve_dependency()
-    # print(f"{values=} {errors=} {dependency_cache=}")
-
-    result = await func2.do(user_id=3)
-    assert result
-
-    print(repr(app))
-
-
-"""
-body_paramsとは何か？
-Dependantで直接生成するのでなく、get_dependantで生成する。
-
-"""

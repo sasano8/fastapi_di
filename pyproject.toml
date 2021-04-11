@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "fastapi_di"
 version = "0.0.1"
-description = "fastapi_di"
+description = "Extracted the dependency injection process from fastapi."
 authors = ["sasano8 <y-sasahara@ys-method.com>"]
 license = "MIT"
 readme = "README.md"

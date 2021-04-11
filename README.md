@@ -37,3 +37,7 @@ result = asyncio.run(main())
 print(result)
 # => {'id': 1, 'name': 'bob', 'memo': 'test'}}
 ```
+
+# warning
+This library is in the experimental stage.
+
